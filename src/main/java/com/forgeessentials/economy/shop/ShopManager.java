@@ -4,12 +4,7 @@ import static net.minecraftforge.event.entity.player.PlayerInteractEvent.Action.
 
 import java.io.File;
 import java.lang.reflect.Type;
-import java.util.HashSet;
-import java.util.List;
-import java.util.Map;
-import java.util.Set;
-import java.util.UUID;
-import java.util.WeakHashMap;
+import java.util.*;
 
 import net.minecraft.block.Block;
 import net.minecraft.command.ICommandSender;
@@ -19,6 +14,7 @@ import net.minecraft.item.Item;
 import net.minecraft.item.ItemBlock;
 import net.minecraft.item.ItemStack;
 import net.minecraft.tileentity.TileEntity;
+import net.minecraft.tileentity.TileEntityChest;
 import net.minecraft.util.ChatComponentTranslation;
 import net.minecraft.util.IChatComponent;
 import net.minecraft.util.MovingObjectPosition;
@@ -59,9 +55,16 @@ public class ShopManager extends ServerEventHandler implements ConfigLoader
 {
 
     public static final String PERM_BASE = ModuleEconomy.PERM + ".shop";
-    public static final String PERM_CREATE = PERM_BASE + ".create";
-    public static final String PERM_DESTROY = PERM_BASE + ".destroy";
-    public static final String PERM_USE = PERM_BASE + ".use";
+
+    public static final String PERM_BASE_ADMIN = ModuleEconomy.PERM + ".admin";
+    public static final String PERM_ADMIN_CREATE = PERM_BASE_ADMIN + ".create";
+    public static final String PERM_ADMIN_DESTROY = PERM_BASE_ADMIN + ".destroy";
+    public static final String PERM_ADMIN_USE = PERM_BASE_ADMIN + ".use";
+
+    public static final String PERM_BASE_PERSONAL = ModuleEconomy.PERM + ".personal";
+    public static final String PERM_PERSONAL_CREATE = PERM_BASE_PERSONAL + ".create";
+    public static final String PERM_PERSONAL_DESTROY = PERM_BASE_PERSONAL + ".destroy";
+    public static final String PERM_PERSONAL_USE = PERM_BASE_PERSONAL + ".use";
 
     public static final String MSG_MODIFY_DENIED = "You are not allowed to modify shops!";
     public static final String STOCK_HELP = "If disabled, shops have an infinite stock. Otherwise players can only buy items, that have been sold to the shop before";
@@ -70,7 +73,7 @@ public class ShopManager extends ServerEventHandler implements ConfigLoader
 
     public static final Set<String> shopTags = new HashSet<String>();
 
-    public static boolean useStock;
+    public static boolean virtualStock;
 
     protected static Set<ShopData> shops = new HashSet<ShopData>();
 
@@ -100,9 +103,16 @@ public class ShopManager extends ServerEventHandler implements ConfigLoader
     {
         load();
         APIRegistry.perms.registerPermissionDescription(PERM_BASE, "Shop permissions");
-        APIRegistry.perms.registerPermission(PERM_USE, PermissionLevel.TRUE, "Allow usage of shops");
-        APIRegistry.perms.registerPermission(PERM_CREATE, PermissionLevel.OP, "Allow creating shops");
-        APIRegistry.perms.registerPermission(PERM_DESTROY, PermissionLevel.OP, "Allow destroying shops");
+        APIRegistry.perms.registerPermissionDescription(PERM_BASE_ADMIN, "Admin shop permissions");
+        APIRegistry.perms.registerPermissionDescription(PERM_BASE_PERSONAL, "Personal shop permissions");
+
+        APIRegistry.perms.registerPermission(PERM_ADMIN_USE, PermissionLevel.TRUE, "Allow usage of admin shops");
+        APIRegistry.perms.registerPermission(PERM_ADMIN_CREATE, PermissionLevel.OP, "Allow creating admin shops");
+        APIRegistry.perms.registerPermission(PERM_ADMIN_DESTROY, PermissionLevel.OP, "Allow destroying admin shops");
+
+        APIRegistry.perms.registerPermission(PERM_PERSONAL_USE, PermissionLevel.TRUE, "Allow usage of personal shops");
+        APIRegistry.perms.registerPermission(PERM_PERSONAL_CREATE, PermissionLevel.TRUE, "Allow to create personal shops with stock chest");
+        APIRegistry.perms.registerPermission(PERM_PERSONAL_DESTROY, PermissionLevel.TRUE, "Allow destroying personal shops");
     }
 
     public static File getSaveFile()
@@ -122,9 +132,12 @@ public class ShopManager extends ServerEventHandler implements ConfigLoader
 
         Type type = new TypeToken<List<ShopData>>() {
         }.getType();
+
         List<ShopData> shopList = DataManager.load(type, getSaveFile());
+
         if (shopList == null)
             return;
+
         for (ShopData shop : shopList)
             addShop(shop);
     }
@@ -142,7 +155,7 @@ public class ShopManager extends ServerEventHandler implements ConfigLoader
             return;
 
         UserIdent ident = UserIdent.get(event.getPlayer());
-        if (!APIRegistry.perms.checkUserPermission(ident, point, PERM_DESTROY))
+        if (!APIRegistry.perms.checkUserPermission(ident, point, PERM_ADMIN_DESTROY))
         {
             ChatOutputHandler.chatError(event.getPlayer(), Translator.translate(MSG_MODIFY_DENIED));
             event.setCanceled(true);
@@ -175,7 +188,7 @@ public class ShopManager extends ServerEventHandler implements ConfigLoader
         final ShopData shop = shopFrameMap.get(event.target.getPersistentID());
         if (shop == null)
             return;
-        if (!APIRegistry.perms.checkUserPermission(UserIdent.get(event.entityPlayer), new WorldPoint(event.target), PERM_DESTROY))
+        if (!APIRegistry.perms.checkUserPermission(UserIdent.get(event.entityPlayer), new WorldPoint(event.target), PERM_ADMIN_DESTROY))
         {
             ChatOutputHandler.chatError(event.entityPlayer, Translator.translate(MSG_MODIFY_DENIED));
             event.setCanceled(true);
@@ -203,7 +216,7 @@ public class ShopManager extends ServerEventHandler implements ConfigLoader
         ShopData shop = shopFrameMap.get(event.target.getPersistentID());
         if (shop == null)
             return;
-        if (!APIRegistry.perms.checkUserPermission(UserIdent.get(event.entityPlayer), new WorldPoint(event.target), PERM_CREATE))
+        if (!APIRegistry.perms.checkUserPermission(UserIdent.get(event.entityPlayer), new WorldPoint(event.target), PERM_ADMIN_CREATE))
         {
             ChatOutputHandler.chatError(event.entityPlayer, Translator.translate(MSG_MODIFY_DENIED));
             event.setCanceled(true);
@@ -236,54 +249,67 @@ public class ShopManager extends ServerEventHandler implements ConfigLoader
         UserIdent ident = UserIdent.get(event.entityPlayer);
         ShopData shop = shopSignMap.get(point);
         boolean newShop = shop == null;
+
         if (newShop)
         {
             Block block = event.world.getBlock(event.x, event.y, event.z);
+
             if (!ItemUtil.isSign(block))
                 return;
+
             String[] text = ItemUtil.getSignText(point);
             LoggingHandler.felog.info("DEBUG text = " + text + " / type of text = " + text[0].getClass().getName());
+
             if (!shopTags.isEmpty())
                 LoggingHandler.felog.info("DEBUG shopTags(0) type = " + shopTags.iterator().next());
-            if (text == null || text.length < 1 || !shopTags.contains(text[0]))
+
+            if (text == null || text.length == 0|| !shopTags.contains(text[0]))
                 return;
-            if (!APIRegistry.perms.checkUserPermission(ident, point, PERM_CREATE))
+
+            if (!APIRegistry.perms.checkUserPermission(ident, point, PERM_ADMIN_CREATE))
             {
                 ChatOutputHandler.chatError(event.entityPlayer, Translator.translate("You are not allowed to create shops!"));
                 return;
             }
+
             EntityItemFrame frame = ShopData.findFrame(point);
             if (frame == null)
             {
                 ChatOutputHandler.chatError(event.entityPlayer, Translator.translate("No item frame found"));
                 return;
             }
+
             if (shopFrameMap.containsKey(frame.getPersistentID()))
             {
                 ChatOutputHandler.chatError(event.entityPlayer, Translator.translate("Item frame already used for another shop!"));
                 return;
             }
-            shop = new ShopData(point, frame);
+
+            shop = new ShopData(ident.getOrGenerateUuid(), point, frame, ShopData.findChest(point));
         }
 
         shop.update();
+
         if (!shop.isValid)
         {
             ChatOutputHandler.chatError(event.entityPlayer, Translator.format("Shop invalid: %s", shop.getError()));
+
             if (!newShop)
                 removeShop(shop);
+
             return;
         }
+
         if (newShop)
         {
-            ChatOutputHandler.chatConfirmation(event.entityPlayer, Translator.translate("Created shop!"));
+            ChatOutputHandler.chatConfirmation(event.entityPlayer, Translator.translate(shop.useChestStock ? "Created shop with stock!" : "Created shop!"));
             addShop(shop);
             return;
         }
 
         event.setCanceled(true);
 
-        if (!APIRegistry.perms.checkUserPermission(ident, point, PERM_USE))
+        if (!APIRegistry.perms.checkUserPermission(ident, point, PERM_ADMIN_USE))
         {
             ChatOutputHandler.chatError(event.entityPlayer, Translator.translate("You are not allowed to use shops!"));
             return;
@@ -294,7 +320,8 @@ public class ShopManager extends ServerEventHandler implements ConfigLoader
         transactionStack.stackSize = shop.amount;
         IChatComponent itemName = transactionStack.func_151000_E();
 
-        Wallet wallet = APIRegistry.economy.getWallet(UserIdent.get((EntityPlayerMP) event.entityPlayer));
+        Wallet buyerWallet = APIRegistry.economy.getWallet(UserIdent.get((EntityPlayerMP) event.entityPlayer));
+        Wallet ownerWaller = APIRegistry.economy.getWallet(UserIdent.get(shop.owner));
 
         if (shop.sellPrice >= 0 && (shop.buyPrice < 0 || sameItem))
         {
@@ -320,32 +347,35 @@ public class ShopManager extends ServerEventHandler implements ConfigLoader
                 ModuleEconomy.tryRemoveItems(event.entityPlayer, transactionStack, transactionStack.stackSize - removedAmount);
             }
 
-            wallet.add(shop.sellPrice);
+            buyerWallet.add(shop.sellPrice);
             shop.setStock(shop.getStock() + 1);
 
             String price = APIRegistry.economy.toString(shop.sellPrice);
-            ChatComponentTranslation msg = new ChatComponentTranslation("Sold %s x %s for %s (wallet: %s)", shop.amount, itemName, price, wallet.toString());
+            ChatComponentTranslation msg = new ChatComponentTranslation("Sold %s x %s for %s (wallet: %s)", shop.amount, itemName, price, buyerWallet.toString());
             msg.getChatStyle().setColor(ChatOutputHandler.chatConfirmationColor);
             ChatOutputHandler.sendMessage(event.entityPlayer, msg);
         }
         else
         {
-            if (useStock && shop.getStock() <= 0)
+            if ((virtualStock || shop.useChestStock) && shop.getStock() <= 0)
             {
                 ChatOutputHandler.chatError(event.entityPlayer, "Shop stock is empty");
                 return;
             }
-            if (!wallet.withdraw(shop.buyPrice))
+
+            if (!buyerWallet.withdraw(shop.buyPrice))
             {
                 String errorMsg = Translator.format("You do not have enough %s in your wallet", APIRegistry.economy.currency(2));
                 ChatOutputHandler.chatError(event.entityPlayer, errorMsg);
                 return;
             }
-            if (useStock)
+
+            if (virtualStock)
                 shop.setStock(shop.getStock() - 1);
+
             PlayerUtil.give(event.entityPlayer, transactionStack);
             String price = APIRegistry.economy.toString(shop.buyPrice);
-            ChatComponentTranslation msg = new ChatComponentTranslation("Bought %s x %s for %s (wallet: %s)", shop.amount, itemName, price, wallet.toString());
+            ChatComponentTranslation msg = new ChatComponentTranslation("Bought %s x %s for %s (wallet: %s)", shop.amount, itemName, price, buyerWallet.toString());
             msg.getChatStyle().setColor(ChatOutputHandler.chatConfirmationColor);
             ChatOutputHandler.sendMessage(event.entityPlayer, msg);
         }
@@ -385,11 +415,11 @@ public class ShopManager extends ServerEventHandler implements ConfigLoader
     @Override
     public void load(Configuration config, boolean isReload)
     {
-        useStock = config.getBoolean(CONFIG_FILE, "use_stock", false, STOCK_HELP);
+        virtualStock = config.getBoolean(CONFIG_FILE, "adminVirtualStock", false, STOCK_HELP);
         String[] tags = config.get(CONFIG_FILE, "shopTags", shopTags.toArray(new String[shopTags.size()])).getStringList();
         shopTags.clear();
-        for (String tag : tags)
-            shopTags.add(tag);
+
+        Collections.addAll(shopTags, tags);
     }
 
     @Override
