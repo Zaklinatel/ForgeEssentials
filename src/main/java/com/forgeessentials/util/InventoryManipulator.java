@@ -1,29 +1,57 @@
 package com.forgeessentials.util;
 
-import com.sun.istack.internal.NotNull;
 import net.minecraft.inventory.IInventory;
 import net.minecraft.item.ItemStack;
 
 import java.util.*;
 import java.util.function.Consumer;
 
+/**
+ * Decorator that expands the possibilities for inventory operations and
+ * implements {@link Iterable} of type {@link ItemStack} so object of this
+ * type can be iterated:
+ *
+ * <pre>
+ * TileEntityChest tileChest;
+ * ...
+ * InventoryManipulator chest = new InventoryManipulator(tileChest);
+ * for (ItemStack stack : chest) {
+ *     // Iterates over all slots in the inventory
+ * }
+ * </pre>
+ *
+ * @see InventoryDecorator
+ * @see Iterable
+ */
 public class InventoryManipulator extends InventoryDecorator implements Iterable<ItemStack>
 {
+    /**
+     * Basic constructor encapsulating the inventory object
+     *
+     * @param inventory target inventory
+     */
     public InventoryManipulator(IInventory inventory) {
         super(inventory);
     }
 
     /**
-     * @inheritDocs
+     * Returns an iterator over inventory of type {@link ItemStack}
+     *
+     * @see Iterator
      */
     @Override
     public Iterator<ItemStack> iterator() {
         return new Itr();
     }
 
-    public int getFreeSlots()
+    /**
+     * Returns a count of empty slots in the inventory
+     *
+     * @return free slots count
+     */
+    public int getEmptySlotsCount()
     {
-        int total = inventory.getSizeInventory();
+        int total = getSizeInventory();
 
         for (ItemStack stack : this)
         {
@@ -34,17 +62,25 @@ public class InventoryManipulator extends InventoryDecorator implements Iterable
         return total;
     }
 
+    /**
+     * Calculate how much items of given type can be putted in
+     * the inventory. Counts free slots as max stack size
+     * and adds a remaining space in not full stacks of the same type.
+     *
+     * @param targetStack ItemStack to put
+     * @return count of items can be putted.
+     */
     public int getFreeSpaceForItem(ItemStack targetStack)
     {
         int stackLimit = getStackLimit(targetStack);
-        int total = inventory.getSizeInventory() * stackLimit;
+        int total = getSizeInventory() * stackLimit;
 
-        for (ItemStack stack : this)
+        for (ItemStack slotStack : this)
         {
-            if (stack != null)
+            if (slotStack != null)
             {
-                total -= stack.isItemEqual(targetStack)
-                        ? stack.stackSize
+                total -= slotStack.isItemEqual(targetStack)
+                        ? slotStack.stackSize
                         : stackLimit;
             }
         }
@@ -52,32 +88,48 @@ public class InventoryManipulator extends InventoryDecorator implements Iterable
         return total;
     }
 
+    /**
+     * Checks whether inventory has enough space for target stack or not.
+     * Counts free slots (adds max stack size per slot) and remaining space in
+     * not full stacks of the same type.
+     *
+     * @param stack stack to check
+     * @return {@code} true if the inventory has enough space.
+     */
     public boolean isFit(ItemStack stack)
     {
         return getFreeSpaceForItem(stack) >= stack.stackSize;
     }
 
-    public boolean pushItemStack(ItemStack pushStack)
+    /**
+     * Puts item stack into the inventory in first a empty slot or first not
+     * full stacks of the same type of item.
+     *
+     * @param stack stack to put
+     * @return {@code true} if operation success or {@code false} if not
+     *         enough free space.
+     */
+    public boolean putItemStack(ItemStack stack)
     {
-        if (!isFit(pushStack))
+        if (!isFit(stack))
             return false;
 
-        int stackLimit = getStackLimit(pushStack);
+        int stackLimit = getStackLimit(stack);
 
         int i = 0;
-        for (ItemStack stack : this)
+        for (ItemStack slotStack : this)
         {
-            if (stack == null)
+            if (slotStack == null)
             {
-                inventory.setInventorySlotContents(i, pushStack);
+                setInventorySlotContents(i, stack);
                 break;
             }
             else
             {
-                if (stack.isItemEqual(pushStack))
+                if (slotStack.isItemEqual(stack))
                 {
-                    int amount = Math.min(stackLimit - stack.stackSize, pushStack.stackSize);
-                    inventory.setInventorySlotContents(i, pushStack.splitStack(amount));
+                    int amount = Math.min(stackLimit - slotStack.stackSize, stack.stackSize);
+                    setInventorySlotContents(i, stack.splitStack(amount));
                 }
             }
             ++i;
@@ -86,13 +138,19 @@ public class InventoryManipulator extends InventoryDecorator implements Iterable
         return true;
     }
 
-    public int countItems(@NotNull ItemStack searchItemStack)
+    /**
+     * Counts an items of given type in the inventory.
+     *
+     * @param stack Item stack to count (damage )
+     * @return items count in all stacks in the inventory
+     */
+    public int countItems(ItemStack stack)
     {
         int count = 0;
 
         for (ItemStack slotStack : this)
         {
-            if (slotStack != null && slotStack.isItemEqual(searchItemStack))
+            if (slotStack != null && slotStack.isItemEqual(stack))
             {
                 count += slotStack.stackSize;
             }
@@ -101,41 +159,39 @@ public class InventoryManipulator extends InventoryDecorator implements Iterable
         return count;
     }
 
-    public int getStackLimit(@NotNull ItemStack stack)
+    /**
+     * Returns a minimum stack limit for a given stack in the current inventory.
+     *
+     * @param stack Target item stack
+     * @return stack limit
+     */
+    public int getStackLimit(ItemStack stack)
     {
-        return Math.min(inventory.getInventoryStackLimit(), stack.getMaxStackSize());
+        return Math.min(getInventoryStackLimit(), stack.getMaxStackSize());
     }
 
     /**
      * An iterator over inventory.
-     * Helper class for more convenient iterating over inventory slots.
-     *
-     * @see Iterator
-     * @see IInventory
      */
     protected class Itr implements Iterator<ItemStack>
     {
-        private int index = -1;
-
         /**
-         * @inheritDoc
+         * Current slot index
          */
+        private int slotIndex = -1;
+
         @Override
         public boolean hasNext()
         {
-            return index != inventory.getSizeInventory();
+            return slotIndex != getSizeInventory();
         }
 
-        /**
-         * {@inheritDoc}
-         * If filter is present
-         */
         @Override
         public ItemStack next()
         {
             try
             {
-                return inventory.getStackInSlot(++index);
+                return getStackInSlot(++slotIndex);
             }
             catch (ArrayIndexOutOfBoundsException e)
             {
@@ -143,14 +199,11 @@ public class InventoryManipulator extends InventoryDecorator implements Iterable
             }
         }
 
-        /**
-         * @inheritDoc
-         */
         @Override
         public void remove()
         {
             requireIndexLegal();
-            inventory.setInventorySlotContents(index, null);
+            setInventorySlotContents(slotIndex, null);
         }
 
         /**
@@ -173,11 +226,11 @@ public class InventoryManipulator extends InventoryDecorator implements Iterable
         /**
          * Return inventory slot index on current iteration
          *
-         * @return Current index
+         * @return current slot index
          */
         public int getIndex()
         {
-            return index;
+            return slotIndex;
         }
 
         /**
@@ -195,7 +248,7 @@ public class InventoryManipulator extends InventoryDecorator implements Iterable
         public void set(ItemStack itemStack)
         {
             requireIndexLegal();
-            inventory.setInventorySlotContents(index, itemStack);
+            setInventorySlotContents(slotIndex, itemStack);
         }
 
         /**
@@ -207,7 +260,7 @@ public class InventoryManipulator extends InventoryDecorator implements Iterable
          */
         private void requireIndexLegal()
         {
-            if (index == -1)
+            if (slotIndex == -1)
                 throw new IllegalStateException();
         }
     }

@@ -4,8 +4,16 @@ import net.minecraft.entity.player.EntityPlayer;
 import net.minecraft.inventory.IInventory;
 import net.minecraft.item.ItemStack;
 
+/**
+ * Basic abstract class implements Decorator pattern for {@link IInventory} interface
+ *
+ * @see <a href="https://en.wikipedia.org/wiki/Decorator_pattern">Decorator pattern</a>
+ */
 public abstract class InventoryDecorator implements IInventory {
-    protected IInventory inventory;
+    /**
+     * Encapsulated {@link IInventory} object
+     */
+    private IInventory inventory;
 
     public InventoryDecorator(IInventory inventory) {
         this.inventory = inventory;
