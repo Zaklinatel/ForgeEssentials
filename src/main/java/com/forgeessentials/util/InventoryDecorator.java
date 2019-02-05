@@ -13,7 +13,7 @@ public abstract class InventoryDecorator implements IInventory {
     /**
      * Encapsulated {@link IInventory} object
      */
-    private IInventory inventory;
+    protected IInventory inventory;
 
     public InventoryDecorator(IInventory inventory) {
         this.inventory = inventory;

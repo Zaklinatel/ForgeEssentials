@@ -30,7 +30,8 @@ public class InventoryManipulator extends InventoryDecorator implements Iterable
      *
      * @param inventory target inventory
      */
-    public InventoryManipulator(IInventory inventory) {
+    public InventoryManipulator(IInventory inventory)
+    {
         super(inventory);
     }
 
@@ -40,7 +41,8 @@ public class InventoryManipulator extends InventoryDecorator implements Iterable
      * @see Iterator
      */
     @Override
-    public Iterator<ItemStack> iterator() {
+    public Iterator<ItemStack> iterator()
+    {
         return new Itr();
     }
 
@@ -183,20 +185,20 @@ public class InventoryManipulator extends InventoryDecorator implements Iterable
         @Override
         public boolean hasNext()
         {
-            return slotIndex != getSizeInventory();
+            return slotIndex+1 != getSizeInventory();
         }
 
         @Override
         public ItemStack next()
         {
-            try
-            {
-                return getStackInSlot(++slotIndex);
-            }
-            catch (ArrayIndexOutOfBoundsException e)
-            {
-                throw new NoSuchElementException();
-            }
+            return getStackInSlot(++slotIndex);
+//            try
+//            {
+//            }
+//            catch (ArrayIndexOutOfBoundsException e)
+//            {
+//                throw new NoSuchElementException();
+//            }
         }
 
         @Override

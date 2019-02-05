@@ -1,19 +1,12 @@
 package com.forgeessentials.economy.shop;
 
 import java.lang.ref.WeakReference;
-import java.util.Collections;
-import java.util.Comparator;
-import java.util.Iterator;
-import java.util.List;
-import java.util.UUID;
+import java.util.*;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
-import com.forgeessentials.api.UserIdent;
-import com.forgeessentials.util.output.ChatOutputHandler;
-import com.forgeessentials.util.output.LoggingHandler;
+import com.forgeessentials.util.InventoryManipulator;
 import net.minecraft.block.Block;
-import net.minecraft.block.BlockChest;
 import net.minecraft.entity.item.EntityItemFrame;
 import net.minecraft.item.ItemStack;
 import net.minecraft.tileentity.TileEntity;
@@ -51,7 +44,7 @@ public class ShopData
     protected WeakReference<EntityItemFrame> itemFrame;
 
     @Expose(serialize = false, deserialize = false)
-    protected WeakReference<TileEntityChest> chest;
+    protected WeakReference<ShopStockChest> chest;
 
     @Expose(serialize = false, deserialize = false)
     protected boolean isValid;
@@ -75,17 +68,23 @@ public class ShopData
 
     /* ------------------------------------------------------------ */
 
-    public ShopData(UUID ownerUUID, WorldPoint point, EntityItemFrame frame, TileEntityChest entityChest)
+    public ShopData(UUID ownerUUID, WorldPoint point, EntityItemFrame frame)
     {
         pos = point;
         itemFrameId = frame.getPersistentID();
         itemFrame = new WeakReference<EntityItemFrame>(frame);
         owner = ownerUUID;
+        useChestStock = true;
+    }
 
-        if (entityChest != null) {
-            chest = new WeakReference<TileEntityChest>(entityChest);
-            useChestStock = true;
-        }
+    public ShopData(UUID ownerUUID, WorldPoint point, EntityItemFrame frame, TileEntityChest entityChest)
+    {
+        pos = point;
+        itemFrameId = frame.getPersistentID();
+        itemFrame = new WeakReference<>(frame);
+        owner = ownerUUID;
+        chest = new WeakReference<>(new ShopStockChest(entityChest, frame.getDisplayedItem()));
+        useChestStock = true;
     }
 
     public void update()
@@ -124,9 +123,7 @@ public class ShopData
 
         if (useChestStock)
         {
-            TileEntityChest chest = getChest();
-
-            if (chest == null) {
+            if (getChest() == null) {
                 error = Translator.translate("This shop needs a stock chest, but it not found");
                 return;
             }
@@ -208,12 +205,15 @@ public class ShopData
         return error;
     }
 
-    public TileEntityChest getChest() {
+    public ShopStockChest getChest() {
+        if (!useChestStock)
+            return null;
+
         if (chest == null) {
             TileEntityChest chestEntity = findChest(new WorldPoint(pos).setY(pos.getY() - 1));
 
             if (chestEntity != null) {
-                chest = new WeakReference<TileEntityChest>(chestEntity);
+                chest = new WeakReference<>(new ShopStockChest(chestEntity, getItemFrame().getDisplayedItem().copy()));
             }
         }
 
@@ -237,6 +237,48 @@ public class ShopData
             }
         }
         return frame;
+    }
+
+    public int getStock()
+    {
+        return useChestStock
+                ? getChest().getAmount()
+                : stock;
+    }
+
+    public boolean decrStock(int amount) {
+        if (useChestStock)
+        {
+            return getChest().remove(amount);
+        }
+        else
+        {
+            if (this.stock <= 0)
+                return false;
+
+            this.stock -= amount;
+            return true;
+        }
+    }
+
+    public boolean incrStock(int amount) {
+        if (useChestStock)
+        {
+            return getChest().add(amount);
+        }
+        else
+        {
+            this.stock += amount;
+            return true;
+        }
+    }
+
+    public void setStock(int stock)
+    {
+        if (!useChestStock)
+            this.stock = stock;
+
+
     }
 
     public static EntityItemFrame findFrame(WorldPoint p)
@@ -300,21 +342,4 @@ public class ShopData
         AxisAlignedBB aabb = AxisAlignedBB.getBoundingBox(x - D, y - D, z - D, x + D, y + D, z + D);
         return aabb;
     }
-
-    public int getStock()
-    {
-        if (!useChestStock)
-            return stock;
-
-        return 0; // todo get stock from chest
-    }
-
-    public void setStock(int stock)
-    {
-        if (!useChestStock)
-            this.stock = stock;
-
-        // todo set items count in chest
-    }
-
 }
