@@ -7,6 +7,7 @@ import java.lang.reflect.Type;
 import java.sql.SQLOutput;
 import java.util.*;
 
+import com.forgeessentials.commands.util.PlayerInvChest;
 import cpw.mods.fml.common.eventhandler.Event;
 import net.minecraft.block.Block;
 import net.minecraft.command.ICommandSender;

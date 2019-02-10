@@ -46,9 +46,20 @@ public abstract class PlayerUtil
      */
     public static void give(EntityPlayer player, ItemStack item)
     {
-        EntityItem entityitem = player.dropPlayerItemWithRandomChoice(item, false);
-        entityitem.delayBeforeCanPickup = 0;
-        entityitem.func_145797_a(player.getCommandSenderName());
+        int stackLimit = Math.min(item.getMaxStackSize(), player.inventory.getInventoryStackLimit());
+
+        while (item.stackSize > 0)
+        {
+            int dropAmount = Math.min(item.stackSize, stackLimit);
+            item.stackSize -= dropAmount;
+
+            ItemStack newStack = item.copy();
+            newStack.stackSize = dropAmount;
+
+            EntityItem entityitem = player.dropPlayerItemWithRandomChoice(newStack, false);
+            entityitem.delayBeforeCanPickup = 0;
+            entityitem.func_145797_a(player.getCommandSenderName());
+        }
     }
 
     /**

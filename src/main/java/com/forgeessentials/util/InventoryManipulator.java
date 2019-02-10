@@ -121,10 +121,16 @@ public class InventoryManipulator extends InventoryDecorator implements Iterable
         int i = 0;
         for (ItemStack slotStack : this)
         {
+            int addAmount = 0;
+
             if (slotStack == null)
             {
-                setInventorySlotContents(i, putStack);
-                break;
+                ItemStack newStack = putStack.copy();
+
+                addAmount = Math.min(stackLimit, putStack.stackSize);
+                newStack.stackSize = addAmount;
+
+                setInventorySlotContents(i, newStack);
             }
             else
             {
@@ -133,15 +139,17 @@ public class InventoryManipulator extends InventoryDecorator implements Iterable
                     int freeSpace = stackLimit - slotStack.stackSize;
                     if (freeSpace != 0)
                     {
-                        int addAmount = Math.min(freeSpace, putStack.stackSize);
+                        addAmount = Math.min(freeSpace, putStack.stackSize);
                         slotStack.stackSize += addAmount;
-                        putStack.stackSize -= addAmount;
-
-                        if (putStack.stackSize == 0)
-                            break;
                     }
                 }
             }
+
+            putStack.stackSize -= addAmount;
+
+            if (putStack.stackSize == 0)
+                break;
+
             ++i;
         }
 

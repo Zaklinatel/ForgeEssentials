@@ -91,9 +91,6 @@ public final class ItemUtil
         NBTTagCompound comp1 = stack1.getTagCompound();
         NBTTagCompound comp2 = stack2.getTagCompound();
 
-        System.out.println("DEBUG ItemUtil::isStackDataEquals: comp1 = " + comp1);
-        System.out.println("DEBUG ItemUtil::isStackDataEquals: comp2 = " + comp2);
-
         if (comp1 == null)
             return comp2 == null;
 
