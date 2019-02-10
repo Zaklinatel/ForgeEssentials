@@ -1,6 +1,7 @@
 package com.forgeessentials.economy.shop;
 
 import com.forgeessentials.util.InventoryManipulator;
+import com.forgeessentials.util.ItemUtil;
 import net.minecraft.inventory.InventoryLargeChest;
 import net.minecraft.tileentity.TileEntityChest;
 import net.minecraft.item.ItemStack;
@@ -12,13 +13,13 @@ public class ShopStockChest extends InventoryManipulator
     public ShopStockChest(TileEntityChest inventory, ItemStack shopItemStack)
     {
         super(inventory);
-        this.shopItemStack = shopItemStack;
+        this.shopItemStack = shopItemStack.copy();
     }
 
     public ShopStockChest(InventoryLargeChest inventory, ItemStack shopItemStack)
     {
         super(inventory);
-        this.shopItemStack = shopItemStack;
+        this.shopItemStack = shopItemStack.copy();
     }
 
     public int getAmount()
@@ -31,7 +32,7 @@ public class ShopStockChest extends InventoryManipulator
         ItemStack stack = shopItemStack.copy();
         stack.stackSize = amount;
 
-        return putItemStack(shopItemStack);
+        return putItemStack(stack);
     }
 
     public boolean remove(int amount)
@@ -42,7 +43,7 @@ public class ShopStockChest extends InventoryManipulator
         int slot = 0;
         for (ItemStack slotStack : this)
         {
-            if (slotStack != null && slotStack.isItemEqual(shopItemStack))
+            if (slotStack != null && ItemUtil.isStackDataEquals(slotStack, shopItemStack))
             {
                 int decreaseAmount = Math.min(slotStack.stackSize, amount);
                 decrStackSize(slot, decreaseAmount);

@@ -175,24 +175,22 @@ public class ModuleEconomy extends ServerEventHandler implements Economy, Config
             ChatOutputHandler.chatConfirmation(ident.getPlayerMP(), Translator.format("You have now %s", wallet.toString()));
     }
 
-    public static int tryRemoveItems(EntityPlayer player, ItemStack itemStack, int amount)
+    public static int tryRemoveItems(EntityPlayer player, ItemStack removeStack, int amount)
     {
-        int itemDamage = ItemUtil.getItemDamage(itemStack);
         int itemsRemoved = 0;
 
         for (int slot = 0; slot < player.inventory.mainInventory.length && amount > 0; slot++)
         {
-            ItemStack stack = player.inventory.mainInventory[slot];
+            ItemStack slotStack = player.inventory.mainInventory[slot];
 
-            if (stack != null && stack.getItem() == itemStack.getItem() && (itemDamage == -1 || stack.getItemDamage() == itemDamage))
+            if (slotStack != null && ItemUtil.isStackDataEquals(removeStack, slotStack))
             {
-                int removeCount = Math.min(stack.stackSize, amount);
+                int removeCount = Math.min(slotStack.stackSize, amount);
 
-                if (removeCount == stack.stackSize) {
+                if (removeCount == slotStack.stackSize)
                     player.inventory.setInventorySlotContents(slot, null);
-                } else {
+                else
                     player.inventory.decrStackSize(slot, removeCount);
-                }
 
                 amount -= removeCount;
                 itemsRemoved += removeCount;
@@ -207,11 +205,10 @@ public class ModuleEconomy extends ServerEventHandler implements Economy, Config
     public static int countInventoryItems(EntityPlayer player, ItemStack itemType)
     {
         int foundStacks = 0;
-        int itemDamage = ItemUtil.getItemDamage(itemType);
         for (int slot = 0; slot < player.inventory.mainInventory.length; slot++)
         {
             ItemStack stack = player.inventory.mainInventory[slot];
-            if (stack != null && stack.getItem() == itemType.getItem() && (itemDamage == -1 || stack.getItemDamage() == itemDamage))
+            if (stack != null && ItemUtil.isStackDataEquals(itemType, stack))
                 foundStacks += stack.stackSize;
         }
         return foundStacks;

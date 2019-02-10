@@ -83,4 +83,23 @@ public final class ItemUtil
         return subTag;
     }
 
+    public static boolean isStackDataEquals(ItemStack stack1, ItemStack stack2)
+    {
+        if (!stack1.isItemEqual(stack2))
+            return false;
+
+        NBTTagCompound comp1 = stack1.getTagCompound();
+        NBTTagCompound comp2 = stack2.getTagCompound();
+
+        System.out.println("DEBUG ItemUtil::isStackDataEquals: comp1 = " + comp1);
+        System.out.println("DEBUG ItemUtil::isStackDataEquals: comp2 = " + comp2);
+
+        if (comp1 == null)
+            return comp2 == null;
+
+        if (comp2 == null)
+            return false;
+
+        return comp1.equals(comp2);
+    }
 }

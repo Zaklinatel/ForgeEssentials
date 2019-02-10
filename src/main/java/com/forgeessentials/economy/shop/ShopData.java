@@ -5,7 +5,6 @@ import java.util.*;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
-import com.forgeessentials.util.InventoryManipulator;
 import net.minecraft.block.Block;
 import net.minecraft.entity.item.EntityItemFrame;
 import net.minecraft.item.ItemStack;
@@ -36,7 +35,7 @@ public class ShopData
 
     protected final UUID itemFrameId;
 
-    protected boolean useChestStock = false;
+    protected boolean useStockChest;
 
     protected final UUID owner;
 
@@ -64,27 +63,28 @@ public class ShopData
     @Expose(serialize = false, deserialize = false)
     protected ItemStack item;
 
-    private int stock;
+    private int virtualStock;
 
     /* ------------------------------------------------------------ */
 
-    public ShopData(UUID ownerUUID, WorldPoint point, EntityItemFrame frame)
-    {
-        pos = point;
-        itemFrameId = frame.getPersistentID();
-        itemFrame = new WeakReference<EntityItemFrame>(frame);
-        owner = ownerUUID;
-        useChestStock = true;
-    }
-
-    public ShopData(UUID ownerUUID, WorldPoint point, EntityItemFrame frame, TileEntityChest entityChest)
+    public ShopData(UUID ownerUUID, WorldPoint point, EntityItemFrame frame, boolean stockChest)
     {
         pos = point;
         itemFrameId = frame.getPersistentID();
         itemFrame = new WeakReference<>(frame);
         owner = ownerUUID;
-        chest = new WeakReference<>(new ShopStockChest(entityChest, frame.getDisplayedItem()));
-        useChestStock = true;
+
+        if (stockChest)
+        {
+            TileEntityChest tileEntityChest = findChest(point);
+
+            if (tileEntityChest != null)
+            {
+                chest = new WeakReference<>(new ShopStockChest(tileEntityChest, frame.getDisplayedItem()));
+                useStockChest = true;
+            }
+        }
+
     }
 
     public void update()
@@ -121,7 +121,7 @@ public class ShopData
             return;
         }
 
-        if (useChestStock)
+        if (useStockChest)
         {
             if (getChest() == null) {
                 error = Translator.translate("This shop needs a stock chest, but it not found");
@@ -205,14 +205,20 @@ public class ShopData
         return error;
     }
 
-    public ShopStockChest getChest() {
-        if (!useChestStock)
+    public ShopStockChest getChest()
+    {
+        if (!useStockChest)
             return null;
 
-        if (chest == null) {
-            TileEntityChest chestEntity = findChest(new WorldPoint(pos).setY(pos.getY() - 1));
+        if (chest == null || chest.get() == null)
+        {
+            TileEntityChest chestEntity = findChest(pos);
 
-            if (chestEntity != null) {
+            if (chestEntity == null)
+            {
+                return null;
+            } else
+            {
                 chest = new WeakReference<>(new ShopStockChest(chestEntity, getItemFrame().getDisplayedItem().copy()));
             }
         }
@@ -241,44 +247,56 @@ public class ShopData
 
     public int getStock()
     {
-        return useChestStock
+        return useStockChest
                 ? getChest().getAmount()
-                : stock;
+                : virtualStock;
+    }
+
+    public boolean setStock(int amount)
+    {
+        int changeAmount = amount - getStock();
+
+        if (changeAmount == 0)
+        {
+            return true;
+        }
+
+        if (!useStockChest)
+        {
+            this.virtualStock = amount;
+            return true;
+        }
+
+        return changeAmount > 0
+                ? incrStock(changeAmount)
+                : decrStock(-changeAmount);
     }
 
     public boolean decrStock(int amount) {
-        if (useChestStock)
+        if (useStockChest)
         {
             return getChest().remove(amount);
         }
         else
         {
-            if (this.stock <= 0)
+            if (this.virtualStock <= 0)
                 return false;
 
-            this.stock -= amount;
+            this.virtualStock -= amount;
             return true;
         }
     }
 
     public boolean incrStock(int amount) {
-        if (useChestStock)
+        if (useStockChest)
         {
             return getChest().add(amount);
         }
         else
         {
-            this.stock += amount;
+            this.virtualStock += amount;
             return true;
         }
-    }
-
-    public void setStock(int stock)
-    {
-        if (!useChestStock)
-            this.stock = stock;
-
-
     }
 
     public static EntityItemFrame findFrame(WorldPoint p)
@@ -291,14 +309,10 @@ public class ShopData
             return entities.get(0);
 
         final Vec3 offset = Vec3.createVectorHelper(p.getX(), p.getY() + 0.5, p.getZ());
-        Collections.sort(entities, new Comparator<EntityItemFrame>() {
-            @Override
-            public int compare(EntityItemFrame o1, EntityItemFrame o2)
-            {
-                Vec3 v1 = Vec3.createVectorHelper(o1.posX, o1.posY, o1.posZ);
-                Vec3 v2 = Vec3.createVectorHelper(o2.posX, o2.posY, o2.posZ);
-                return (int) Math.signum(offset.distanceTo(v1) - offset.distanceTo(v2));
-            }
+        Collections.sort(entities, (o1, o2) -> {
+            Vec3 v1 = Vec3.createVectorHelper(o1.posX, o1.posY, o1.posZ);
+            Vec3 v2 = Vec3.createVectorHelper(o2.posX, o2.posY, o2.posZ);
+            return (int) Math.signum(offset.distanceTo(v1) - offset.distanceTo(v2));
         });
 
         for (Iterator<EntityItemFrame> it = entities.iterator(); it.hasNext();)
@@ -313,8 +327,8 @@ public class ShopData
 
     public static TileEntityChest findChest(WorldPoint signPoint)
     {
-        WorldPoint tilePoint = new WorldPoint(signPoint).setY(signPoint.getY() - 1);
-        TileEntity tileEntity = tilePoint.getTileEntity();
+        WorldPoint point = new WorldPoint(signPoint).setY(signPoint.getY() - 1);
+        TileEntity tileEntity = point.getTileEntity();
         TileEntityChest chest;
 
         // Check block is a chest

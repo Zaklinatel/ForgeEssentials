@@ -81,7 +81,7 @@ public class InventoryManipulator extends InventoryDecorator implements Iterable
         {
             if (slotStack != null)
             {
-                total -= slotStack.isItemEqual(targetStack)
+                total -= ItemUtil.isStackDataEquals(slotStack, targetStack)
                         ? slotStack.stackSize
                         : stackLimit;
             }
@@ -107,31 +107,39 @@ public class InventoryManipulator extends InventoryDecorator implements Iterable
      * Puts item stack into the inventory in first a empty slot or first not
      * full stacks of the same type of item.
      *
-     * @param stack stack to put
+     * @param putStack stack to put
      * @return {@code true} if operation success or {@code false} if not
      *         enough free space.
      */
-    public boolean putItemStack(ItemStack stack)
+    public boolean putItemStack(ItemStack putStack)
     {
-        if (!isFit(stack))
+        if (!isFit(putStack))
             return false;
 
-        int stackLimit = getStackLimit(stack);
+        int stackLimit = getStackLimit(putStack);
 
         int i = 0;
         for (ItemStack slotStack : this)
         {
             if (slotStack == null)
             {
-                setInventorySlotContents(i, stack);
+                setInventorySlotContents(i, putStack);
                 break;
             }
             else
             {
-                if (slotStack.isItemEqual(stack))
+                if (ItemUtil.isStackDataEquals(putStack, slotStack))
                 {
-                    int amount = Math.min(stackLimit - slotStack.stackSize, stack.stackSize);
-                    setInventorySlotContents(i, stack.splitStack(amount));
+                    int freeSpace = stackLimit - slotStack.stackSize;
+                    if (freeSpace != 0)
+                    {
+                        int addAmount = Math.min(freeSpace, putStack.stackSize);
+                        slotStack.stackSize += addAmount;
+                        putStack.stackSize -= addAmount;
+
+                        if (putStack.stackSize == 0)
+                            break;
+                    }
                 }
             }
             ++i;
@@ -152,7 +160,7 @@ public class InventoryManipulator extends InventoryDecorator implements Iterable
 
         for (ItemStack slotStack : this)
         {
-            if (slotStack != null && slotStack.isItemEqual(stack))
+            if (slotStack != null && ItemUtil.isStackDataEquals(slotStack, stack))
             {
                 count += slotStack.stackSize;
             }
