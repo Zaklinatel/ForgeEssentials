@@ -8,6 +8,7 @@ import java.sql.SQLOutput;
 import java.util.*;
 
 import com.forgeessentials.commands.util.PlayerInvChest;
+import com.forgeessentials.util.UserIdentUtils;
 import cpw.mods.fml.common.eventhandler.Event;
 import net.minecraft.block.Block;
 import net.minecraft.command.ICommandSender;
@@ -236,11 +237,19 @@ public class ShopManager extends ServerEventHandler implements ConfigLoader
         if (shop == null)
             return;
 
-        if (!APIRegistry.perms.checkUserPermission(UserIdent.get(event.entityPlayer), new WorldPoint(event.target), PERM_ADMIN_CREATE))
+        if (!shop.owner.equals(UserIdent.get(event.entityPlayer).getOrGenerateUuid()))
         {
-            ChatOutputHandler.chatError(event.entityPlayer, Translator.translate(MSG_MODIFY_DENIED));
+            ChatComponentTranslation msg = new ChatComponentTranslation(
+                    "Owner: %s, item: %s",
+                    UserIdent.get(shop.owner).getUsername(),
+                    shop.item.func_151000_E()
+            );
+
+            ChatOutputHandler.sendMessage(event.entityPlayer, msg);
+
             event.setCanceled(true);
         }
+
     }
 
     @SubscribeEvent(priority = EventPriority.HIGH)
